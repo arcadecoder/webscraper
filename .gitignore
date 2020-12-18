@@ -1,0 +1,4 @@
+# packages/enviornments
+__pycache__/
+venv/
+.Python
