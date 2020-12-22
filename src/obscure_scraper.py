@@ -2,11 +2,34 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import pandas as pd 
+from selenium import webdriver 
 
 base_url = "https://www.dictionaryofobscuresorrows.com"
 urls = []
 urls.append(base_url)
 all_data = []
+
+
+def find_youtube_video_content(entry, soup):
+    '''
+    '''
+    #Find main information from post video class
+    descrip = entry.find('p').text
+    main_link = entry.find('a', href=True)['href']
+    #Find Youtube title and information from sub links
+    youtube = soup.find('iframe', id='youtube_iframe')['src']
+    youtube_soup = BeautifulSoup(requests.get(youtube).text, 'html.parser')
+    tt = youtube_soup.find('a', href=True)['href']
+    yt_second = BeautifulSoup(requests.get(tt).text, 'html.parser')
+    emotion_meta = yt_second.find_all('meta', attrs={"property": "og:title"})
+    video_title = yt_second.find('title').text
+    video_dict = {
+        "emotion": video_title,
+        "description": descrip,
+        "source": main_link ,
+        "youtube_link": tt, 
+    }
+    return video_dict
 
 
 def find_content(soup):
@@ -18,8 +41,9 @@ def find_content(soup):
     '''
     try: 
         emotions = soup.find_all('h2')
-        post = soup.find_all('div', attrs={"class": "post text"})
-        for entry in post:
+        post_text = soup.find_all('div', attrs={"class": "post text"})
+        post_video = soup.find_all('div', attrs={"class": "post video"})
+        for entry in post_text:
             source = entry.find('a', href=True)
             link = source['href']
             title = entry.find('h2').text
@@ -30,6 +54,9 @@ def find_content(soup):
                 "source":  link
             }
             all_data.append(entry_dict)
+        for entry in post_video:
+            yt_vido_dict = find_youtube_video_content(entry, soup)
+            all_data.append(yt_vido_dict)
         return
     except AttributeError as err:
         print(err)
@@ -56,7 +83,8 @@ def parse_site(response):
         get_next_url(soup)
         # convert the list of dictionaries to a pandas dataframe
         df = pd.DataFrame(all_data)
-        df.to_csv("dictionary_of_sorrows.csv", index=False)
+        final_df = df.drop_duplicates(subset=["emotion"], keep='first')
+        final_df.to_csv("dictionary_of_sorrows.csv", index=False)
         return 
     except requests.exceptions.HTTPError as err:
         raise SystemExit(err)
